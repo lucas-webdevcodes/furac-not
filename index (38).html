@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Furacão de Notícias</title>
+<meta name="theme-color" content="#0b3d33">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" href="/icon-192.png">
+<style>
+:root{--bg:#eef2ef;--card:#fff;--tx:#14211c;--mute:#5b6b64;--line:#d6dfda;--verde:#0b3d33;--ouro:#f2c200;--ok:#0a7a4f}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1512;--card:#16211d;--tx:#e8efeb;--mute:#93a39b;--line:#26352f;--ok:#4fd19a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{background:var(--verde);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 14px 10px;position:sticky;top:0;z-index:5}
+.topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{margin:0;font-size:1.25rem;font-weight:800;letter-spacing:-.01em}
+.sub{font-size:.8rem;opacity:.8;margin-top:2px}
+button{font:inherit;cursor:pointer;border:0}
+.btn{background:var(--ouro);color:#2b2200;font-weight:700;border-radius:10px;padding:8px 12px;font-size:.9rem}
+.btn:focus-visible,.aba:focus-visible,.t:focus-visible,a:focus-visible{outline:3px solid var(--ouro);outline-offset:2px}
+.abas,.tempo{display:flex;gap:6px;overflow-x:auto;padding:10px 0 2px;scrollbar-width:none}
+.abas::-webkit-scrollbar,.tempo::-webkit-scrollbar{display:none}
+.aba{flex:none;background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:7px 13px;font-size:.92rem;font-weight:600}
+.aba[aria-pressed=true]{background:#fff;color:var(--verde)}
+main{max-width:720px;margin:0 auto;padding:10px 12px 90px}
+.tempo{padding:2px 0 8px}
+.t{flex:none;background:transparent;color:var(--mute);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:.85rem}
+.t[aria-pressed=true]{background:var(--verde);color:#fff;border-color:var(--verde)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 9px}
+.card.alta{border-left:5px solid var(--ouro)}
+.card a.tit{color:var(--tx);font-weight:700;text-decoration:none;display:block;font-size:1.02rem}
+.meta{font-size:.8rem;color:var(--mute);margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.sel{font-weight:700}.sel.of{color:var(--ok)}.sel.al{color:#9a6f00}
+@media (prefers-color-scheme:dark){.sel.al{color:var(--ouro)}}
+.tr{margin:6px 0 0;font-size:.9rem;color:var(--mute)}
+.vazio,.msg{text-align:center;color:var(--mute);padding:36px 12px}
+.aviso{font-size:.78rem;color:var(--mute);text-align:center;margin-top:14px}
+.barra{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:flex;gap:8px;white-space:nowrap}
+.barra[hidden],.limpar[hidden]{display:none}
+.copiar,.limpar{font-weight:700;border-radius:999px;padding:12px 20px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.copiar{background:var(--verde);color:#fff}
+.limpar{background:var(--card);color:var(--tx);border:1px solid var(--line)}
+.copiar:focus-visible,.limpar:focus-visible{outline:3px solid var(--ouro);outline-offset:2px}
+.sele{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font-size:.9rem;font-weight:600;cursor:pointer}
+.sele input{width:22px;height:22px;accent-color:var(--verde);margin:0}
+.card.marcado{outline:2px solid var(--ok)}
+@media (prefers-reduced-motion:no-preference){.card{animation:e .25s ease-out both}@keyframes e{from{opacity:0}to{opacity:1}}}
+</style>
+</head>
+<body>
+<header>
+  <div class="topo">
+    <div><h1>Furacão de Notícias</h1><div class="sub" id="sub">Buscando…</div></div>
+    <button class="btn" id="atualizar">Atualizar</button>
+  </div>
+  <div class="abas" id="abas"></div>
+</header>
+<main>
+  <div class="tempo" id="tempo"></div>
+  <div id="lista"><div class="msg">Buscando notícias nos portais…<br>Na primeira abertura do dia pode levar até 1 minuto.</div></div>
+  <p class="aviso" id="aviso"></p>
+</main>
+<div class="barra" id="barra" hidden>
+  <button class="limpar" id="limpar" hidden>Limpar</button>
+  <button class="copiar" id="copiar">Copiar manchetes</button>
+</div>
+<script>
+const TEMPOS=[["1h","Última hora",1],["hoje","Hoje",0],["24h","24 horas",24],["48h","48 horas",48]];
+let dados=null,aba="alta",tempo="24h";
+const sel=new Map();
+const $=(id)=>document.getElementById(id);
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+
+function desde(){
+  if(tempo==="hoje"){const d=new Date();d.setHours(0,0,0,0);return d.getTime()}
+  return Date.now()-TEMPOS.find(t=>t[0]===tempo)[2]*3600e3;
+}
+function ha(ms){
+  const m=Math.max(1,Math.round((Date.now()-ms)/60000));
+  if(m<60)return "há "+m+" min";
+  const h=Math.round(m/60);
+  return h<24?"há "+h+" h":"há "+Math.round(h/24)+" d";
+}
+function visiveis(){
+  if(!dados)return [];
+  const lim=desde();
+  let l=dados.itens.filter(i=>i.data>=lim);
+  if(aba==="alta"){
+    let a=l.filter(i=>i.qtd>=3);
+    if(!a.length)a=l.filter(i=>i.qtd>=2);
+    return a.sort((x,y)=>y.qtd-x.qtd||y.data-x.data);
+  }
+  return l.filter(i=>i.cats.includes(aba)).sort((x,y)=>y.data-x.data);
+}
+function nomeAba(){return aba==="alta"?"Em alta":dados.abas[aba]}
+
+function desenha(){
+  const box=$("abas");box.replaceChildren();
+  [["alta","🔥 Em alta"],...Object.entries(dados.abas)].forEach(([id,n])=>{
+    const b=el("button","aba",n);b.setAttribute("aria-pressed",id===aba);
+    b.onclick=()=>{aba=id;desenha()};box.appendChild(b);
+  });
+  const tb=$("tempo");tb.replaceChildren();
+  TEMPOS.forEach(([id,n])=>{
+    const b=el("button","t",n);b.setAttribute("aria-pressed",id===tempo);
+    b.onclick=()=>{tempo=id;desenha()};tb.appendChild(b);
+  });
+  const l=visiveis(),lista=$("lista");lista.replaceChildren();
+  if(!l.length){
+    lista.appendChild(el("div","vazio","Nenhuma notícia neste filtro. Tente 48 horas ou outra aba."));
+  }
+  l.forEach(i=>{
+    const c=el("article","card"+(i.qtd>=3?" alta":""));
+    const a=el("a","tit",i.titulo);a.href=i.link;a.target="_blank";a.rel="noopener noreferrer";
+    c.appendChild(a);
+    if(i.trecho)c.appendChild(el("p","tr",i.trecho));
+    const m=el("div","meta");
+    if(i.qtd>=3)m.appendChild(el("span","sel al","🔥 "+i.qtd+" portais"));
+    if(i.oficial)m.appendChild(el("span","sel of","✓ Fonte oficial"));
+    m.appendChild(el("span",null,i.fonte));
+    m.appendChild(el("span",null,ha(i.data)));
+    if(i.fontes.length>1)m.appendChild(el("span",null,"Também em: "+i.fontes.filter(f=>f!==i.fonte).slice(0,4).join(", ")));
+    c.appendChild(m);
+    const lb=el("label","sele"),cb=document.createElement("input");
+    cb.type="checkbox";cb.checked=sel.has(i.link);
+    if(cb.checked)c.classList.add("marcado");
+    cb.onchange=()=>{
+      if(cb.checked)sel.set(i.link,i);else sel.delete(i.link);
+      c.classList.toggle("marcado",cb.checked);atualizaBarra(true);
+    };
+    lb.append(cb,el("span",null,"Selecionar para copiar"));
+    c.appendChild(lb);lista.appendChild(c);
+  });
+  atualizaBarra(l.length>0);
+  const h=new Date(dados.atualizadoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  $("sub").textContent="Atualizado às "+h+" · "+l.length+" notícias";
+  $("aviso").textContent=dados.falhas.length?"Portais que não responderam agora: "+[...new Set(dados.falhas)].join(", ")+".":"";
+}
+
+async function carregar(forcar){
+  $("atualizar").disabled=true;$("sub").textContent="Buscando…";
+  try{
+    const r=await fetch("/api/noticias"+(forcar?"?refresh=1":""));
+    if(!r.ok)throw new Error();
+    dados=await r.json();desenha();
+  }catch(e){
+    $("lista").replaceChildren(el("div","msg","Não deu para buscar as notícias. Toque em Atualizar para tentar de novo."));
+    $("sub").textContent="Sem conexão";
+  }
+  $("atualizar").disabled=false;
+}
+$("atualizar").onclick=()=>carregar(true);
+
+function atualizaBarra(mostrar){
+  $("barra").hidden=!(mostrar||sel.size);
+  $("copiar").textContent=sel.size?"Copiar "+sel.size+(sel.size===1?" selecionada":" selecionadas"):"Copiar manchetes";
+  $("limpar").hidden=!sel.size;
+}
+$("limpar").onclick=()=>{sel.clear();desenha()};
+$("copiar").onclick=async()=>{
+  const usaSel=sel.size>0;
+  const l=usaSel?[...sel.values()].sort((x,y)=>y.data-x.data):visiveis();
+  const data=new Date().toLocaleDateString("pt-BR");
+  const titulo=usaSel?"Manchetes selecionadas":"Manchetes ("+nomeAba()+")";
+  const txt=titulo+" — "+data+"\n\n"+l.map(i=>"- "+i.titulo+" ("+i.fonte+(i.qtd>=3?", "+i.qtd+" portais":"")+")").join("\n");
+  try{await navigator.clipboard.writeText(txt)}catch{
+    const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();document.execCommand("copy");t.remove();
+  }
+  const b=$("copiar"),o=b.textContent;b.textContent="Copiado!";setTimeout(()=>atualizaBarra(true),1600);
+};
+carregar(false);
+</script>
+</body>
+</html>
