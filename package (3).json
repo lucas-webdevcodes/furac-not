@@ -1,0 +1,8 @@
+{
+  "name": "furacao-de-noticias",
+  "version": "1.0.0",
+  "description": "Coleta noticias de beneficios e governo em tempo real",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
